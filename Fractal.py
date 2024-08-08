@@ -3,6 +3,7 @@ import pygame
 import random
 import string
 import os
+import pickle
 
 class FractalImageGenerator:
     def __init__(self):
@@ -29,6 +30,35 @@ class FractalImageGenerator:
         self.generation = 0
         self.font = pygame.font.SysFont(None, 36)
         self.alphabet = string.ascii_uppercase
+
+        self.load_state()  # Load previous state if available
+
+    def save_state(self):
+        state = {
+            'points': self.points,
+            'connections': self.connections,
+            'q_table': self.q_table,
+            'angles': (self.angle_x, self.angle_y, self.angle_z),
+            'epoch': self.epoch,
+            'generation': self.generation
+        }
+        with open('fractal_state.pkl', 'wb') as f:
+            pickle.dump(state, f)
+        print(f"State saved after epoch {self.epoch}, generation {self.generation}")
+
+    def load_state(self):
+        try:
+            with open('fractal_state.pkl', 'rb') as f:
+                state = pickle.load(f)
+                self.points = state['points']
+                self.connections = state['connections']
+                self.q_table = state['q_table']
+                self.angle_x, self.angle_y, self.angle_z = state['angles']
+                self.epoch = state['epoch']
+                self.generation = state['generation']
+                print(f"Loaded state from epoch {self.epoch}, generation {self.generation}")
+        except FileNotFoundError:
+            print("No previous state file found. Starting new session.")
 
     def generate_fractal(self, level=10):
         self.points.clear()
@@ -103,6 +133,12 @@ class FractalImageGenerator:
 
         self.points = new_points
 
+        self.generation += 1
+        if self.generation >= 1000:
+            self.epoch += 1
+            self.generation = 0
+            self.save_state()  # Save state at the start of each new epoch
+
     def compute_reward(self, point, next_point):
         distance_to_origin = np.linalg.norm(np.array(next_point))
         return -distance_to_origin
@@ -161,43 +197,50 @@ class FractalImageGenerator:
         return x_new, y_new, z_new
 
     def run(self):
-        self.generate_fractal()
-        running = True
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    print("Mouse clicked at", pygame.mouse.get_pos())
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:  # Exit on ESC
-                        running = False
+     self.generate_fractal()
+     running = True
+     while running:
+         for event in pygame.event.get():
+             if event.type == pygame.QUIT:
+                 running = False
+             elif event.type == pygame.KEYDOWN:
+                 if event.key == pygame.K_ESCAPE:  # Exit on ESC
+                     running = False
 
-            self.update()
+         self.update()
 
-            self.screen.fill((0, 0, 0))
+         self.screen.fill((0, 0, 0))
 
-            for point in self.points:
-                x, y = self.project_to_2d(point)
-                pygame.draw.circle(self.screen, (255, 255, 255), (x, y), 3)
+         for point in self.points:
+             x, y = self.project_to_2d(point)
+             pygame.draw.circle(self.screen, (255, 255, 255), (x, y), 3)
+ 
+         for point1, connections in self.connections.items():
+             x1, y1 = self.project_to_2d(point1)
+             for point2, letter in connections.items():
+                 x2, y2 = self.project_to_2d(point2)
+                 pygame.draw.line(self.screen, (255, 255, 255), (x1, y1), (x2, y2))
+                 mid_x, mid_y = (x1 + x2) // 2, (y1 + y2) // 2
+                 text_surface = self.font.render(letter, True, (255, 255, 255))
+                 self.screen.blit(text_surface, (mid_x, mid_y))
 
-            for point1, connections in self.connections.items():
-                x1, y1 = self.project_to_2d(point1)
-                for point2, letter in connections.items():
-                    x2, y2 = self.project_to_2d(point2)
-                    pygame.draw.line(self.screen, (255, 255, 255), (x1, y1), (x2, y2))
-                    mid_x, mid_y = (x1 + x2) // 2, (y1 + y2) // 2
-                    text_surface = self.font.render(letter, True, (255, 255, 255))
-                    self.screen.blit(text_surface, (mid_x, mid_y))
+        # Render the epoch and generation text
+         epoch_text = self.font.render(f'Epoch: {self.epoch}', True, (255, 255, 255))
+         generation_text = self.font.render(f'Generation: {self.generation}', True, (255, 255, 255))
+        
+        # Blit the text onto the screen at the top left corner
+         self.screen.blit(epoch_text, (10, 10))
+         self.screen.blit(generation_text, (10, 40))
 
-            pygame.display.flip()
-            self.clock.tick(60)
+         pygame.display.flip()
+         self.clock.tick(60)
 
-            self.angle_x += 0.01
-            self.angle_y += 0.01
-            self.angle_z += 0.01
+         self.angle_x += 0.01
+         self.angle_y += 0.01
+         self.angle_z += 0.01
 
-        pygame.quit()
+     pygame.quit()
+
 
 if __name__ == "__main__":
     generator = FractalImageGenerator()
